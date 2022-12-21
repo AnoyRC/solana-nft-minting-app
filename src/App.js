@@ -1,9 +1,57 @@
 import './App.css';
-import { Connection, PublicKey, clusterApiUrl } from '@solana/web3.js';
+import { Metaplex, keypairIdentity, bundlrStorage } from "@metaplex-foundation/js";
+import { Connection, clusterApiUrl,PublicKey, Keypair } from '@solana/web3.js';
 import { useEffect, useState } from 'react';
+import * as anchor from "@project-serum/anchor";
+
+const connection = new Connection(clusterApiUrl("devnet"));
+const wallet = Keypair.generate();
+const opts = {
+  preFlightCommitment: "processed"
+}
+export const CANDY_MACHINE_PROGRAM = new anchor.web3.PublicKey(
+  "cndy3Z4yapfJBmL3ShUp5exZKqR3z33thTzeNMm2gRZ"
+);
+
+const metaplex = Metaplex.make(connection)
+    .use(keypairIdentity(wallet))
+    .use(bundlrStorage());
+
+
 
 const App = () => {
   const[walletAddress, setWalletAddress] = useState(null)
+ 
+  
+
+  const getProvider = () => {
+    const Provider = new anchor.AnchorProvider(
+      connection,
+      window.solana,
+      opts.preFlightCommitment
+    );
+    return Provider;
+  }
+
+  const getCandyMachineId = () => {
+    try {
+      return new anchor.web3.PublicKey(process.env.REACT_APP_CANDY_MACHINE_ID);
+    } catch (e) {
+      console.log("Failed to construct CandyMachineId", e);
+      return undefined;
+    }
+  };
+
+  const candyMachineId = getCandyMachineId();
+  const getProgramState = async () => {
+    const provider = getProvider();
+    const idl = await anchor.Program.fetchIdl(CANDY_MACHINE_PROGRAM, provider);
+    const program = new anchor.Program(idl, CANDY_MACHINE_PROGRAM, provider);
+    const state = await program.account.candyMachine.fetch(candyMachineId);
+    console.log(state.data.itemsAvailable.toNumber())
+    return [program, state];
+  };
+
 
   const checkIfWalletConnected = async() => {
     try {
@@ -18,6 +66,7 @@ const App = () => {
             response.publicKey.toString()
           )
           setWalletAddress(response.publicKey.toString())
+          getProgramState()
         }
       }else{
         alert("Solana object not found! Get a phantom wallet")
